@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b1110" />
+  <meta
+    name="description"
+    content="Wayfarer — Weather intelligence for better travel decisions."
+  />
+  <title>Wayfarer — Weather Intelligence</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="app-shell">
+
+    <header class="topbar">
+      <a href="#" class="brand" id="brandLink">
+        <span class="brand-mark">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+        <span class="brand-name">wayfarer<span>.</span></span>
+      </a>
+
+      <div class="topbar-right">
+        <span class="live-status">
+          <span class="live-dot"></span>
+          Live weather data
+        </span>
+
+        <button class="unit-toggle" id="unitToggle" type="button">
+          <span class="unit-active">°C</span>
+          <span>/</span>
+          <span>°F</span>
+        </button>
+
+        <button class="theme-button" id="themeButton" type="button" aria-label="Toggle theme">
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 12.8A8.5 8.5 0 0 1 11.2 3a8.5 8.5 0 1 0 9.8 9.8Z"/>
+          </svg>
+          <svg class="sun-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+
+      <section class="hero-section">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="eyebrow-line"></span>
+            WEATHER, MADE USEFUL
+          </div>
+
+          <h1>
+            Make plans<br />
+            <em>with confidence.</em>
+          </h1>
+
+          <p class="hero-description">
+            Know what the skies have in store before you pack your bags.
+            Clear forecasts, thoughtful recommendations, better decisions.
+          </p>
+        </div>
+
+        <div class="hero-decoration" aria-hidden="true">
+          <div class="orb orb-one"></div>
+          <div class="orb orb-two"></div>
+          <div class="orb orb-three"></div>
+          <div class="orb orb-four"></div>
+          <div class="orbit-ring"></div>
+        </div>
+      </section>
+
+      <section class="search-panel panel">
+        <div class="section-kicker">
+          <span>01</span>
+          <span class="kicker-divider"></span>
+          YOUR JOURNEY
+        </div>
+
+        <div class="search-heading-row">
+          <div>
+            <h2>Where are you headed?</h2>
+            <p>Plan around the weather, not against it.</p>
+          </div>
+
+          <div class="forecast-limit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 2"/>
+            </svg>
+            Forecasts up to 14 days ahead
+          </div>
+        </div>
+
+        <form class="search-form" id="searchForm">
+
+          <div class="field destination-field">
+            <label for="destination">DESTINATION</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/>
+                <circle cx="12" cy="10" r="2.5"/>
+              </svg>
+              <input
+                type="text"
+                id="destination"
+                placeholder="Search a city..."
+                value="Delhi"
+                autocomplete="off"
+                required
+              />
+              <button class="clear-input hidden" id="clearDestination" type="button" aria-label="Clear destination">
+                ×
+              </button>
+            </div>
+            <div class="location-suggestions hidden" id="locationSuggestions"></div>
+          </div>
+
+          <div class="field date-field">
+            <label for="startDate">FROM</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                <path d="M16 3v4M8 3v4M3 10h18"/>
+              </svg>
+              <input type="date" id="startDate" required />
+            </div>
+          </div>
+
+          <div class="field date-field">
+            <label for="endDate">UNTIL</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                <path d="M16 3v4M8 3v4M3 10h18"/>
+              </svg>
+              <input type="date" id="endDate" required />
+            </div>
+          </div>
+
+          <button class="forecast-button" id="forecastButton" type="submit">
+            <span class="button-text">Read the forecast</span>
+            <span class="button-arrow">↗</span>
+            <span class="button-loader hidden"></span>
+          </button>
+
+        </form>
+
+        <div class="search-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 11v5M12 8h.01"/>
+          </svg>
+          Weather data is fetched live from Open-Meteo. No signup required.
+        </div>
+      </section>
+
+      <div class="error-panel hidden" id="errorPanel">
+        <div class="error-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="m12 3 10 18H2L12 3Z"/>
+            <path d="M12 9v5M12 17h.01"/>
+          </svg>
+        </div>
+        <h2 id="errorTitle">Something went wrong</h2>
+        <p id="errorMessage">
+          We couldn't retrieve the weather. Please try again.
+        </p>
+        <button class="outline-button" id="retryButton" type="button">
+          Try again
+        </button>
+      </div>
+
+      <section class="results-section hidden" id="resultsSection">
+
+        <div class="results-topline">
+          <div class="section-kicker">
+            <span>02</span>
+            <span class="kicker-divider"></span>
+            YOUR FORECAST
+          </div>
+
+          <div class="last-updated" id="lastUpdated">
+            Updated just now
+          </div>
+        </div>
+
+        <div class="location-heading">
+          <div>
+            <div class="location-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/>
+                <circle cx="12" cy="10" r="2.5"/>
+              </svg>
+              <span id="locationCountry">INDIA</span>
+            </div>
+            <h2 id="locationName">Delhi</h2>
+            <p id="dateRangeText">Your selected forecast period</p>
+          </div>
+
+          <div class="location-coordinates" id="locationCoordinates">
+            28.61° N&nbsp;&nbsp; 77.21° E
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+
+          <article class="current-card panel">
+            <div class="card-topline">
+              <span class="card-label">CURRENT CONDITIONS</span>
+              <span class="weather-time" id="currentTime">--:--</span>
+            </div>
+
+            <div class="current-main">
+              <div class="current-weather-icon" id="currentWeatherIcon">☀️</div>
+              <div class="current-temperature">
+                <span id="currentTemperature">--</span><sup>°</sup>
+              </div>
+              <div class="current-condition">
+                <h3 id="currentCondition">Loading...</h3>
+                <p>Feels like <strong id="feelsLike">--°</strong></p>
+              </div>
+            </div>
+
+            <div class="current-location">
+              <span class="status-dot"></span>
+              <span id="currentLocationText">Weather at your destination</span>
+            </div>
+
+            <div class="current-stats">
+              <div class="current-stat">
+                <span class="stat-icon">💧</span>
+                <div>
+                  <span class="stat-title">Humidity</span>
+                  <strong id="currentHumidity">--%</strong>
+                </div>
+              </div>
+
+              <div class="current-stat">
+                <span class="stat-icon">💨</span>
+                <div>
+                  <span class="stat-title">Wind</span>
+                  <strong id="currentWind">-- km/h</strong>
+                </div>
+              </div>
+
+              <div class="current-stat">
+                <span class="stat-icon">☀️</span>
+                <div>
+                  <span class="stat-title">UV Index</span>
+                  <strong id="currentUV">--</strong>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="decision-card panel">
+            <div class="card-topline">
+              <span class="card-label">OUR TAKE</span>
+              <span class="decision-sparkle">✦</span>
+            </div>
+
+            <div class="decision-content">
+              <div class="decision-badge" id="decisionBadge">
+                <span class="decision-badge-dot"></span>
+                <span id="decisionBadgeText">ANALYSING</span>
+              </div>
+
+              <h2 id="decisionTitle">Checking the skies...</h2>
+
+              <p id="decisionDescription">
+                We're looking at the forecast to help you decide.
+              </p>
+
+              <div class="decision-score-row">
+                <div class="decision-score">
+                  <span id="decisionScore">--</span>
+                  <small>/ 100</small>
+                </div>
+
+                <div class="score-label">
+                  <span>TRAVEL<br />CONFIDENCE</span>
+                </div>
+              </div>
+
+              <div class="score-bar">
+                <div class="score-fill" id="scoreFill"></div>
+              </div>
+            </div>
+
+            <div class="decision-footer" id="decisionFooter">
+              Calculating conditions for your selected dates...
+            </div>
+          </article>
+
+          <article class="metrics-card panel">
+            <div class="card-topline">
+              <span class="card-label">AT A GLANCE</span>
+              <span class="card-label muted">SELECTED PERIOD</span>
+            </div>
+
+            <div class="metrics-list">
+              <div class="metric-row">
+                <div class="metric-name">
+                  <span class="metric-symbol">🌡</span>
+                  <span>Temperature</span>
+                </div>
+                <strong id="rangeMetric">-- / --</strong>
+              </div>
+
+              <div class="metric-row">
+                <div class="metric-name">
+                  <span class="metric-symbol">🌧</span>
+                  <span>Rain probability</span>
+                </div>
+                <strong id="rainMetric">--%</strong>
+              </div>
+
+              <div class="metric-row">
+                <div class="metric-name">
+                  <span class="metric-symbol">💨</span>
+                  <span>Average wind</span>
+                </div>
+                <strong id="windMetric">-- km/h</strong>
+              </div>
+
+              <div class="metric-row">
+                <div class="metric-name">
+                  <span class="metric-symbol">☀</span>
+                  <span>Best day</span>
+                </div>
+                <strong id="bestDayMetric">--</strong>
+              </div>
+            </div>
+          </article>
+
+        </div>
+
+        <section class="forecast-section panel">
+          <div class="section-heading-row">
+            <div>
+              <span class="card-label">DAY BY DAY</span>
+              <h2>Your forecast at a glance</h2>
+            </div>
+
+            <div class="forecast-controls">
+              <button class="forecast-scroll-button" id="scrollLeft" type="button" aria-label="Scroll forecast left">
+                ←
+              </button>
+              <button class="forecast-scroll-button" id="scrollRight" type="button" aria-label="Scroll forecast right">
+                →
+              </button>
+            </div>
+          </div>
+
+          <div class="forecast-scroll" id="forecastScroll">
+            <div class="forecast-cards" id="forecastCards"></div>
+          </div>
+        </section>
+
+        <section class="lower-grid">
+
+          <article class="temperature-chart-card panel">
+            <div class="section-heading-row">
+              <div>
+                <span class="card-label">TEMPERATURE TREND</span>
+                <h2>How the days will feel</h2>
+              </div>
+
+              <div class="chart-legend">
+                <span><i class="legend-dot high-dot"></i>High</span>
+                <span><i class="legend-dot low-dot"></i>Low</span>
+              </div>
+            </div>
+
+            <div class="chart-area">
+              <div class="chart-y-labels">
+                <span id="chartY1">--°</span>
+                <span id="chartY2">--°</span>
+                <span id="chartY3">--°</span>
+                <span id="chartY4">--°</span>
+              </div>
+
+              <div class="chart-main">
+                <div class="chart-grid-lines">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+
+                <div class="chart-bars" id="chartBars"></div>
+                <div class="chart-x-labels" id="chartXLabels"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="sun-card panel">
+            <div class="section-heading-row">
+              <div>
+                <span class="card-label">DAYLIGHT</span>
+                <h2>Follow the sun</h2>
+              </div>
+              <span class="sun-symbol">☼</span>
+            </div>
+
+            <div class="sun-visual">
+              <div class="sun-arc">
+                <div class="sun-orbit"></div>
+                <div class="sun-ball" id="sunBall">☀</div>
+              </div>
+              <div class="horizon-line"></div>
+            </div>
+
+            <div class="sun-times">
+              <div>
+                <span class="sun-time-icon">↗</span>
+                <span class="sun-time-label">SUNRISE</span>
+                <strong id="sunriseTime">--:--</strong>
+              </div>
+
+              <div>
+                <span class="sun-time-icon">↘</span>
+                <span class="sun-time-label">SUNSET</span>
+                <strong id="sunsetTime">--:--</strong>
+              </div>
+            </div>
+
+            <div class="daylight-duration">
+              <span>Daylight duration</span>
+              <strong id="daylightDuration">-- hours</strong>
+            </div>
+          </article>
+
+        </section>
+
+        <section class="recommendation-section panel">
+          <div class="recommendation-header">
+            <div>
+              <span class="card-label">PACK YOUR DAY</span>
+              <h2>What should you plan for?</h2>
+              <p id="recommendationSubtitle">
+                A few useful thoughts based on your forecast.
+              </p>
+            </div>
+
+            <div class="recommendation-icon">✦</div>
+          </div>
+
+          <div class="recommendation-grid" id="recommendationGrid"></div>
+        </section>
+
+        <section class="weather-notes panel">
+          <div class="section-heading-row">
+            <div>
+              <span class="card-label">GOOD TO KNOW</span>
+              <h2>Weather notes</h2>
+            </div>
+          </div>
+
+          <div class="notes-grid" id="notesGrid"></div>
+        </section>
+
+        <div class="data-attribution">
+          <span>
+            Weather data by
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+          </span>
+          <span>Forecasts are estimates and may change.</span>
+        </div>
+
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <div class="footer-brand">
+        <span class="brand-mark small">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+        <strong>wayfarer<span>.</span></strong>
+        <span class="footer-tagline">Weather, translated into better decisions.</span>
+      </div>
+
+      <div class="footer-right">
+        Built with live Open-Meteo data
+      </div>
+    </footer>
+
+  </div>
+
+  <div class="toast hidden" id="toast">
+    <span class="toast-icon">✓</span>
+    <span id="toastMessage">Forecast updated</span>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
