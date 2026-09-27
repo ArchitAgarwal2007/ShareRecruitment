@@ -1,303 +1,154 @@
 "use strict";
 
-/* =========================================
-   WAYFARER WEATHER APP
-   Open-Meteo API
-========================================= */
+/*
+  WAYFARER
+  Weather → Decision engine
 
-const API = {
-  geocoding: "https://geocoding-api.open-meteo.com/v1/search",
-  forecast: "https://api.open-meteo.com/v1/forecast"
-};
+  APIs:
+  1. Open-Meteo Geocoding
+  2. Open-Meteo Forecast
+
+  The important part of this project is NOT displaying numbers.
+  The numbers are converted into plain-language advice.
+*/
+
+
+const GEO_API =
+  "https://geocoding-api.open-meteo.com/v1/search";
+
+const WEATHER_API =
+  "https://api.open-meteo.com/v1/forecast";
+
 
 const state = {
   location: null,
   weather: null,
-  forecastDays: [],
+
+  startDate: null,
+  endDate: null,
+
+  days: [],
+
   unit: "celsius",
-  isLoading: false,
-  lastSearch: null,
-  selectedStartDate: null,
-  selectedEndDate: null,
-  searchTimeout: null
+
+  lastSearch: null
 };
 
-const $ = (selector) => document.querySelector(selector);
 
-const elements = {
-  body: document.body,
+const $ = selector => document.querySelector(selector);
 
-  searchForm: $("#searchForm"),
-  destination: $("#destination"),
-  startDate: $("#startDate"),
-  endDate: $("#endDate"),
-  forecastButton: $("#forecastButton"),
-  buttonText: $(".button-text"),
-  buttonArrow: $(".button-arrow"),
-  buttonLoader: $(".button-loader"),
-  clearDestination: $("#clearDestination"),
 
-  locationSuggestions: $("#locationSuggestions"),
+/* =========================
+ELEMENTS
+========================= */
 
-  errorPanel: $("#errorPanel"),
-  errorTitle: $("#errorTitle"),
-  errorMessage: $("#errorMessage"),
-  retryButton: $("#retryButton"),
+const cityInput = $("#cityInput");
+const startDate = $("#startDate");
+const endDate = $("#endDate");
 
-  resultsSection: $("#resultsSection"),
-  lastUpdated: $("#lastUpdated"),
+const searchForm = $("#searchForm");
+const submitBtn = $("#submitBtn");
+const submitText = $("#submitText");
+const loader = $("#loader");
 
-  locationName: $("#locationName"),
-  locationCountry: $("#locationCountry"),
-  locationCoordinates: $("#locationCoordinates"),
-  dateRangeText: $("#dateRangeText"),
+const suggestions = $("#suggestions");
+const clearCity = $("#clearCity");
 
-  currentTime: $("#currentTime"),
-  currentWeatherIcon: $("#currentWeatherIcon"),
-  currentTemperature: $("#currentTemperature"),
-  currentCondition: $("#currentCondition"),
-  feelsLike: $("#feelsLike"),
-  currentHumidity: $("#currentHumidity"),
-  currentWind: $("#currentWind"),
-  currentUV: $("#currentUV"),
-  currentLocationText: $("#currentLocationText"),
+const errorState = $("#errorState");
+const errorTitle = $("#errorTitle");
+const errorMessage = $("#errorMessage");
+const retryBtn = $("#retryBtn");
 
-  decisionCard: $(".decision-card"),
-  decisionBadge: $("#decisionBadge"),
-  decisionBadgeText: $("#decisionBadgeText"),
-  decisionTitle: $("#decisionTitle"),
-  decisionDescription: $("#decisionDescription"),
-  decisionScore: $("#decisionScore"),
-  scoreFill: $("#scoreFill"),
-  decisionFooter: $("#decisionFooter"),
+const results = $("#results");
 
-  rangeMetric: $("#rangeMetric"),
-  rainMetric: $("#rainMetric"),
-  windMetric: $("#windMetric"),
-  bestDayMetric: $("#bestDayMetric"),
+const countryName = $("#countryName");
+const placeName = $("#placeName");
+const tripDates = $("#tripDates");
 
-  forecastCards: $("#forecastCards"),
-  forecastScroll: $("#forecastScroll"),
-  scrollLeft: $("#scrollLeft"),
-  scrollRight: $("#scrollRight"),
+const tripScore = $("#tripScore");
 
-  chartY1: $("#chartY1"),
-  chartY2: $("#chartY2"),
-  chartY3: $("#chartY3"),
-  chartY4: $("#chartY4"),
-  chartBars: $("#chartBars"),
-  chartXLabels: $("#chartXLabels"),
+const tripVerdict = $("#tripVerdict");
+const verdictIcon = $("#verdictIcon");
+const verdictTag = $("#verdictTag");
+const verdictTitle = $("#verdictTitle");
+const verdictText = $("#verdictText");
 
-  sunriseTime: $("#sunriseTime"),
-  sunsetTime: $("#sunsetTime"),
-  daylightDuration: $("#daylightDuration"),
-  sunBall: $("#sunBall"),
+const reasonChips = $("#reasonChips");
 
-  recommendationSubtitle: $("#recommendationSubtitle"),
-  recommendationGrid: $("#recommendationGrid"),
-  notesGrid: $("#notesGrid"),
+const dailyCards = $("#dailyCards");
 
-  unitToggle: $("#unitToggle"),
-  themeButton: $("#themeButton"),
-  moonIcon: $(".moon-icon"),
-  sunIcon: $(".sun-icon"),
+const packingList = $("#packingList");
 
-  toast: $("#toast"),
-  toastMessage: $("#toastMessage")
-};
+const bestDay = $("#bestDay");
+const bestDayText = $("#bestDayText");
 
-/* =========================================
-   WEATHER CODE HELPERS
-========================================= */
+const worstDay = $("#worstDay");
+const worstDayText = $("#worstDayText");
 
-function getWeatherInfo(code, isDay = true) {
-  const weatherMap = {
-    0: {
-      label: isDay ? "Clear sky" : "Clear night",
-      icon: isDay ? "☀️" : "🌙",
-      type: "clear"
-    },
-    1: {
-      label: "Mainly clear",
-      icon: isDay ? "🌤️" : "🌙",
-      type: "clear"
-    },
-    2: {
-      label: "Partly cloudy",
-      icon: "⛅",
-      type: "cloud"
-    },
-    3: {
-      label: "Overcast",
-      icon: "☁️",
-      type: "cloud"
-    },
-    45: {
-      label: "Fog",
-      icon: "🌫️",
-      type: "fog"
-    },
-    48: {
-      label: "Rime fog",
-      icon: "🌫️",
-      type: "fog"
-    },
-    51: {
-      label: "Light drizzle",
-      icon: "🌦️",
-      type: "rain"
-    },
-    53: {
-      label: "Drizzle",
-      icon: "🌦️",
-      type: "rain"
-    },
-    55: {
-      label: "Heavy drizzle",
-      icon: "🌧️",
-      type: "rain"
-    },
-    56: {
-      label: "Freezing drizzle",
-      icon: "🌧️",
-      type: "rain"
-    },
-    57: {
-      label: "Heavy freezing drizzle",
-      icon: "🌧️",
-      type: "rain"
-    },
-    61: {
-      label: "Light rain",
-      icon: "🌦️",
-      type: "rain"
-    },
-    63: {
-      label: "Rain",
-      icon: "🌧️",
-      type: "rain"
-    },
-    65: {
-      label: "Heavy rain",
-      icon: "🌧️",
-      type: "rain"
-    },
-    66: {
-      label: "Freezing rain",
-      icon: "🌧️",
-      type: "rain"
-    },
-    67: {
-      label: "Heavy freezing rain",
-      icon: "🌧️",
-      type: "rain"
-    },
-    71: {
-      label: "Light snow",
-      icon: "🌨️",
-      type: "snow"
-    },
-    73: {
-      label: "Snow",
-      icon: "❄️",
-      type: "snow"
-    },
-    75: {
-      label: "Heavy snow",
-      icon: "❄️",
-      type: "snow"
-    },
-    77: {
-      label: "Snow grains",
-      icon: "🌨️",
-      type: "snow"
-    },
-    80: {
-      label: "Light showers",
-      icon: "🌦️",
-      type: "rain"
-    },
-    81: {
-      label: "Rain showers",
-      icon: "🌧️",
-      type: "rain"
-    },
-    82: {
-      label: "Heavy showers",
-      icon: "⛈️",
-      type: "rain"
-    },
-    85: {
-      label: "Snow showers",
-      icon: "🌨️",
-      type: "snow"
-    },
-    86: {
-      label: "Heavy snow showers",
-      icon: "❄️",
-      type: "snow"
-    },
-    95: {
-      label: "Thunderstorm",
-      icon: "⛈️",
-      type: "storm"
-    },
-    96: {
-      label: "Thunderstorm with hail",
-      icon: "⛈️",
-      type: "storm"
-    },
-    99: {
-      label: "Heavy thunderstorm",
-      icon: "⛈️",
-      type: "storm"
-    }
-  };
+const unitBtn = $("#unitBtn");
 
-  return weatherMap[code] || {
-    label: "Unknown conditions",
-    icon: "🌡️",
-    type: "unknown"
-  };
+const toast = $("#toast");
+
+
+/* =========================
+DATE HELPERS
+========================= */
+
+function localDate(daysFromNow = 0) {
+
+  const date = new Date();
+
+  date.setHours(12, 0, 0, 0);
+
+  date.setDate(date.getDate() + daysFromNow);
+
+  return date;
 }
 
-/* =========================================
-   DATE HELPERS
-========================================= */
 
-function pad(value) {
-  return String(value).padStart(2, "0");
+function dateValue(date) {
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
 }
 
-function dateToInputValue(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+function parseDate(value) {
+
+  const [y, m, d] = value.split("-").map(Number);
+
+  return new Date(y, m - 1, d);
 }
 
-function parseLocalDate(dateString) {
-  if (!dateString) return null;
 
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day);
+function daysBetween(start, end) {
+
+  const a = parseDate(start);
+  const b = parseDate(end);
+
+  return Math.floor(
+    (b - a) / 86400000
+  ) + 1;
 }
 
-function formatDate(dateString, options = {}) {
-  const date = parseLocalDate(dateString);
 
-  if (!date || Number.isNaN(date.getTime())) {
-    return "--";
-  }
+function formatDate(value) {
+
+  const date = parseDate(value);
 
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
-    month: "short",
-    ...options
+    month: "short"
   }).format(date);
 }
 
-function formatLongDate(dateString) {
-  const date = parseLocalDate(dateString);
 
-  if (!date) return "--";
+function formatLongDate(value) {
+
+  const date = parseDate(value);
 
   return new Intl.DateTimeFormat("en-IN", {
     weekday: "long",
@@ -306,1251 +157,1946 @@ function formatLongDate(dateString) {
   }).format(date);
 }
 
-function formatDay(dateString) {
-  const date = parseLocalDate(dateString);
 
-  if (!date) return "--";
+function dayName(value) {
 
   return new Intl.DateTimeFormat("en-IN", {
     weekday: "short"
-  }).format(date);
+  }).format(parseDate(value));
 }
 
-function formatTime(dateTimeString) {
-  if (!dateTimeString) return "--:--";
 
-  const time = dateTimeString.split("T")[1];
+/* =========================
+INITIAL DATES
+========================= */
 
-  if (!time) return "--:--";
+function setupDates() {
 
-  return time.slice(0, 5);
+  const today = localDate(0);
+
+  const max = localDate(13);
+
+  startDate.min = dateValue(today);
+  startDate.max = dateValue(max);
+
+  endDate.min = dateValue(today);
+  endDate.max = dateValue(max);
+
+  startDate.value = dateValue(today);
+  endDate.value = dateValue(localDate(4));
+
 }
 
-function getToday() {
-  return new Date();
-}
 
-function getDateAfterDays(days) {
-  const date = getToday();
-  date.setDate(date.getDate() + days);
-  return date;
-}
+setupDates();
 
-function isDateInRange(dateString, startDate, endDate) {
-  return dateString >= startDate && dateString <= endDate;
-}
 
-function getDaysBetween(startDate, endDate) {
-  const start = parseLocalDate(startDate);
-  const end = parseLocalDate(endDate);
+/* =========================
+API
+========================= */
 
-  if (!start || !end) return 0;
+async function getJSON(url) {
 
-  const difference = end.getTime() - start.getTime();
-
-  return Math.floor(difference / 86400000) + 1;
-}
-
-/* =========================================
-   UNIT HELPERS
-========================================= */
-
-function convertTemperature(celsius) {
-  if (celsius === null || celsius === undefined || Number.isNaN(celsius)) {
-    return "--";
-  }
-
-  if (state.unit === "fahrenheit") {
-    return Math.round((celsius * 9) / 5 + 32);
-  }
-
-  return Math.round(celsius);
-}
-
-function temperatureUnit() {
-  return state.unit === "fahrenheit" ? "°F" : "°C";
-}
-
-function formatTemperature(value) {
-  return `${convertTemperature(value)}${temperatureUnit()}`;
-}
-
-function formatWind(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return "--";
-  }
-
-  return `${Math.round(value)} km/h`;
-}
-
-/* =========================================
-   DEFAULT DATES
-========================================= */
-
-function initializeDates() {
-  const today = getToday();
-  const end = getDateAfterDays(6);
-  const maxDate = getDateAfterDays(13);
-
-  const todayValue = dateToInputValue(today);
-  const endValue = dateToInputValue(end);
-  const maxValue = dateToInputValue(maxDate);
-
-  elements.startDate.min = todayValue;
-  elements.startDate.max = maxValue;
-
-  elements.endDate.min = todayValue;
-  elements.endDate.max = maxValue;
-
-  elements.startDate.value = todayValue;
-  elements.endDate.value = endValue;
-
-  state.selectedStartDate = todayValue;
-  state.selectedEndDate = endValue;
-}
-
-/* =========================================
-   API HELPERS
-========================================= */
-
-async function fetchJSON(url) {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    throw new Error(
+      `API error ${response.status}`
+    );
   }
 
   return response.json();
 }
 
-async function searchLocations(query) {
-  const url = new URL(API.geocoding);
 
-  url.searchParams.set("name", query);
+/* =========================
+GEOCODING
+========================= */
+
+async function searchCities(name) {
+
+  const url = new URL(GEO_API);
+
+  url.searchParams.set("name", name);
   url.searchParams.set("count", "5");
   url.searchParams.set("language", "en");
   url.searchParams.set("format", "json");
 
-  const data = await fetchJSON(url);
+  const data = await getJSON(url);
 
   return data.results || [];
 }
 
-async function fetchWeather(latitude, longitude) {
-  const url = new URL(API.forecast);
 
-  url.searchParams.set("latitude", latitude);
-  url.searchParams.set("longitude", longitude);
+function renderSuggestions(cities) {
+
+  if (!cities.length) {
+
+    suggestions.innerHTML = `
+      <div class="suggestion">
+        <span class="pin">?</span>
+        <div>
+          <strong>No city found</strong>
+          <small>Try another spelling.</small>
+        </div>
+      </div>
+    `;
+
+    suggestions.classList.remove("hidden");
+
+    return;
+  }
+
+
+  suggestions.innerHTML = cities.map((city, index) => {
+
+    const location = [
+      city.admin1,
+      city.country
+    ].filter(Boolean).join(", ");
+
+    return `
+      <div
+        class="suggestion"
+        data-index="${index}"
+      >
+
+        <span class="pin">⌖</span>
+
+        <div>
+          <strong>${escapeHTML(city.name)}</strong>
+          <small>${escapeHTML(location)}</small>
+        </div>
+
+      </div>
+    `;
+
+  }).join("");
+
+
+  suggestions.classList.remove("hidden");
+
+
+  suggestions
+    .querySelectorAll(".suggestion")
+    .forEach(item => {
+
+      item.addEventListener("click", () => {
+
+        const city =
+          cities[Number(item.dataset.index)];
+
+        state.location = city;
+
+        cityInput.value = city.name;
+
+        clearCity.classList.remove("hidden");
+
+        suggestions.classList.add("hidden");
+
+      });
+
+    });
+
+}
+
+
+let searchTimer;
+
+
+cityInput.addEventListener("input", () => {
+
+  const value = cityInput.value.trim();
+
+  clearCity.classList.toggle(
+    "hidden",
+    !value
+  );
+
+  state.location = null;
+
+  clearTimeout(searchTimer);
+
+  if (value.length < 2) {
+
+    suggestions.classList.add("hidden");
+
+    return;
+  }
+
+
+  searchTimer = setTimeout(async () => {
+
+    try {
+
+      const cities =
+        await searchCities(value);
+
+      renderSuggestions(cities);
+
+    } catch {
+
+      suggestions.classList.add("hidden");
+
+    }
+
+  }, 300);
+
+});
+
+
+clearCity.addEventListener("click", () => {
+
+  cityInput.value = "";
+
+  state.location = null;
+
+  clearCity.classList.add("hidden");
+
+  suggestions.classList.add("hidden");
+
+  cityInput.focus();
+
+});
+
+
+document.addEventListener("click", event => {
+
+  if (!event.target.closest(".destination-field")) {
+
+    suggestions.classList.add("hidden");
+
+  }
+
+});
+
+
+/* =========================
+FORECAST
+========================= */
+
+async function getWeather(location) {
+
+  const url = new URL(WEATHER_API);
 
   url.searchParams.set(
-    "current",
+    "latitude",
+    location.latitude
+  );
+
+  url.searchParams.set(
+    "longitude",
+    location.longitude
+  );
+
+
+  /*
+    DAILY VALUES
+
+    We use exactly the signals the brief
+    makes available to us.
+  */
+
+  url.searchParams.set(
+    "daily",
     [
-      "temperature_2m",
-      "relative_humidity_2m",
-      "apparent_temperature",
-      "is_day",
-      "precipitation",
+      "temperature_2m_max",
+      "temperature_2m_min",
+      "apparent_temperature_max",
+      "apparent_temperature_min",
+      "precipitation_probability_max",
+      "precipitation_sum",
+      "uv_index_max",
+      "wind_speed_10m_max",
       "weather_code",
-      "wind_speed_10m"
+      "sunrise",
+      "sunset"
     ].join(",")
   );
+
+
+  /*
+    HOURLY VALUES
+
+    These are important because they let us
+    say things such as:
+
+    "Avoid being outside before 4pm"
+
+    instead of only saying "hot day".
+  */
 
   url.searchParams.set(
     "hourly",
     [
       "temperature_2m",
-      "relative_humidity_2m",
+      "apparent_temperature",
       "precipitation_probability",
+      "precipitation",
       "weather_code",
       "wind_speed_10m",
       "uv_index"
     ].join(",")
   );
 
+
   url.searchParams.set(
-    "daily",
-    [
-      "weather_code",
-      "temperature_2m_max",
-      "temperature_2m_min",
-      "apparent_temperature_max",
-      "apparent_temperature_min",
-      "sunrise",
-      "sunset",
-      "daylight_duration",
-      "precipitation_sum",
-      "rain_sum",
-      "showers_sum",
-      "snowfall_sum",
-      "precipitation_probability_max",
-      "wind_speed_10m_max",
-      "uv_index_max"
-    ].join(",")
+    "timezone",
+    "auto"
   );
 
-  url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "14");
-  url.searchParams.set("temperature_unit", "celsius");
-  url.searchParams.set("wind_speed_unit", "kmh");
-  url.searchParams.set("precipitation_unit", "mm");
+  url.searchParams.set(
+    "start_date",
+    state.startDate
+  );
 
-  return fetchJSON(url);
+  url.searchParams.set(
+    "end_date",
+    state.endDate
+  );
+
+  url.searchParams.set(
+    "temperature_unit",
+    "celsius"
+  );
+
+  url.searchParams.set(
+    "wind_speed_unit",
+    "kmh"
+  );
+
+  url.searchParams.set(
+    "precipitation_unit",
+    "mm"
+  );
+
+
+  return getJSON(url);
+
 }
 
-/* =========================================
-   UI STATE
-========================================= */
 
-function setLoading(isLoading) {
-  state.isLoading = isLoading;
+/* =========================
+WEATHER CODES
+========================= */
 
-  elements.forecastButton.disabled = isLoading;
-  elements.destination.disabled = isLoading;
-  elements.startDate.disabled = isLoading;
-  elements.endDate.disabled = isLoading;
+function weatherInfo(code) {
 
-  if (isLoading) {
-    elements.buttonText.classList.add("hidden");
-    elements.buttonArrow.classList.add("hidden");
-    elements.buttonLoader.classList.remove("hidden");
-  } else {
-    elements.buttonText.classList.remove("hidden");
-    elements.buttonArrow.classList.remove("hidden");
-    elements.buttonLoader.classList.add("hidden");
+  const map = {
+
+    0: ["☀️", "Clear sky"],
+    1: ["🌤️", "Mostly clear"],
+    2: ["⛅", "Partly cloudy"],
+    3: ["☁️", "Overcast"],
+
+    45: ["🌫️", "Foggy"],
+    48: ["🌫️", "Foggy"],
+
+    51: ["🌦️", "Light drizzle"],
+    53: ["🌦️", "Drizzle"],
+    55: ["🌧️", "Heavy drizzle"],
+
+    61: ["🌦️", "Light rain"],
+    63: ["🌧️", "Rain"],
+    65: ["🌧️", "Heavy rain"],
+
+    66: ["🌧️", "Freezing rain"],
+    67: ["🌧️", "Heavy freezing rain"],
+
+    71: ["🌨️", "Light snow"],
+    73: ["❄️", "Snow"],
+    75: ["❄️", "Heavy snow"],
+
+    77: ["🌨️", "Snow grains"],
+
+    80: ["🌦️", "Light showers"],
+    81: ["🌧️", "Showers"],
+    82: ["⛈️", "Heavy showers"],
+
+    85: ["🌨️", "Snow showers"],
+    86: ["❄️", "Heavy snow showers"],
+
+    95: ["⛈️", "Thunderstorm"],
+    96: ["⛈️", "Thunderstorm + hail"],
+    99: ["⛈️", "Severe thunderstorm"]
+
+  };
+
+  return map[code] || ["🌡️", "Variable weather"];
+
+}
+
+
+/* =========================
+HOURLY HELPERS
+========================= */
+
+function hoursForDate(date) {
+
+  const hourly = state.weather.hourly;
+
+  const result = [];
+
+  for (
+    let i = 0;
+    i < hourly.time.length;
+    i++
+  ) {
+
+    if (
+      hourly.time[i].startsWith(date)
+    ) {
+
+      result.push({
+        time: hourly.time[i],
+
+        temperature:
+          hourly.temperature_2m[i],
+
+        apparent:
+          hourly.apparent_temperature[i],
+
+        rainProbability:
+          hourly.precipitation_probability[i] || 0,
+
+        precipitation:
+          hourly.precipitation[i] || 0,
+
+        weatherCode:
+          hourly.weather_code[i],
+
+        wind:
+          hourly.wind_speed_10m[i] || 0,
+
+        uv:
+          hourly.uv_index[i] || 0
+      });
+
+    }
+
   }
+
+  return result;
 }
 
-function showError(title, message) {
-  elements.errorTitle.textContent = title;
-  elements.errorMessage.textContent = message;
-  elements.errorPanel.classList.remove("hidden");
-  elements.resultsSection.classList.add("hidden");
+
+/* =========================
+DAILY DATA
+========================= */
+
+function createDay(index) {
+
+  const daily = state.weather.daily;
+
+  const date = daily.time[index];
+
+  const hours = hoursForDate(date);
+
+
+  return {
+
+    date,
+
+    high:
+      daily.temperature_2m_max[index],
+
+    low:
+      daily.temperature_2m_min[index],
+
+    feelsHigh:
+      daily.apparent_temperature_max[index],
+
+    feelsLow:
+      daily.apparent_temperature_min[index],
+
+    rainProbability:
+      daily.precipitation_probability_max[index],
+
+    precipitation:
+      daily.precipitation_sum[index],
+
+    uv:
+      daily.uv_index_max[index],
+
+    wind:
+      daily.wind_speed_10m_max[index],
+
+    weatherCode:
+      daily.weather_code[index],
+
+    sunrise:
+      daily.sunrise[index],
+
+    sunset:
+      daily.sunset[index],
+
+    hours
+
+  };
+
 }
 
-function hideError() {
-  elements.errorPanel.classList.add("hidden");
-}
 
-function showResults() {
-  elements.resultsSection.classList.remove("hidden");
-  hideError();
-}
+/* =========================
+VERDICT ENGINE
+========================= */
 
-function showToast(message) {
-  elements.toastMessage.textContent = message;
-  elements.toast.classList.remove("hidden");
+/*
+  WHO ARE WE ADVISING?
 
-  clearTimeout(showToast.timeout);
+  General traveller / tourist.
 
-  showToast.timeout = setTimeout(() => {
-    elements.toast.classList.add("hidden");
-  }, 3000);
-}
+  This is deliberately NOT a generic weather
+  label. It answers:
 
-/* =========================================
-   LOCATION SEARCH
-========================================= */
+  "What should I do?"
+*/
 
-function renderLocationSuggestions(results) {
-  if (!results.length) {
-    elements.locationSuggestions.innerHTML = `
-      <div class="suggestion-item">
-        <div class="suggestion-pin">?</div>
-        <div class="suggestion-text">
-          <strong>No locations found</strong>
-          <span>Try another city name</span>
-        </div>
-      </div>
-    `;
 
-    elements.locationSuggestions.classList.remove("hidden");
-    return;
+function analyzeDay(day) {
+
+  const rain =
+    Number(day.rainProbability || 0);
+
+  const precipitation =
+    Number(day.precipitation || 0);
+
+  const high =
+    Number(day.high);
+
+  const feelsHigh =
+    Number(day.feelsHigh || high);
+
+  const wind =
+    Number(day.wind || 0);
+
+  const uv =
+    Number(day.uv || 0);
+
+
+  const thunderstorm =
+    day.hours.some(
+      h =>
+        h.weatherCode >= 95
+    );
+
+
+  const heavyRain =
+    day.hours.some(
+      h =>
+        h.rainProbability >= 75 &&
+        h.precipitation >= 1
+    );
+
+
+  /*
+    HOT HOURS
+
+    Find when it becomes uncomfortable.
+
+    This is what allows the product to say:
+
+    "Avoid being outside before 4pm."
+
+    We don't simply make up 4pm.
+    We inspect the hourly forecast.
+  */
+
+  const hotHours =
+    day.hours.filter(
+      h =>
+        h.apparent >= 36 ||
+        h.temperature >= 36
+    );
+
+
+  let hotUntilHour = null;
+
+  if (hotHours.length >= 2) {
+
+    const lastHot =
+      hotHours[hotHours.length - 1];
+
+    hotUntilHour =
+      Number(
+        lastHot.time.split("T")[1].slice(0,2)
+      );
+
   }
 
-  elements.locationSuggestions.innerHTML = results
-    .map((location, index) => {
-      const country = location.country || "";
-      const admin = location.admin1 || "";
+
+  /*
+    STRONG WIND
+  */
+
+  const windy =
+    wind >= 35;
+
+
+  /*
+    VERY HIGH UV
+  */
+
+  const highUV =
+    uv >= 8;
+
+
+  /*
+    SCORING
+
+    Score is only used to resolve
+    competing conditions.
+  */
+
+  let score = 100;
+
+  if (rain >= 70) score -= 22;
+  else if (rain >= 45) score -= 10;
+
+  if (precipitation >= 15) score -= 15;
+  else if (precipitation >= 5) score -= 7;
+
+  if (thunderstorm) score -= 35;
+
+  if (high >= 40) score -= 20;
+  else if (high >= 36) score -= 10;
+
+  if (wind >= 45) score -= 15;
+  else if (wind >= 35) score -= 7;
+
+  if (uv >= 10) score -= 8;
+  else if (uv >= 8) score -= 4;
+
+  score = Math.max(
+    0,
+    Math.min(100, score)
+  );
+
+
+  /*
+    CLEAR, SPECIFIC VERDICTS
+
+    Priority matters.
+
+    If there is a thunderstorm,
+    "good day outdoors" should NOT win.
+
+    If there is heavy rain,
+    "carry sunglasses" should NOT win.
+
+    If it is extremely hot,
+    we give timing advice.
+  */
+
+
+  if (thunderstorm) {
+
+    return {
+      score,
+      level: "danger",
+
+      text:
+        "Keep outdoor plans flexible.",
+
+      detail:
+        "Thunderstorms are possible. Have an indoor backup and check local conditions before heading out.",
+
+      reason:
+        "Thunderstorms expected",
+
+      type: "storm"
+    };
+
+  }
+
+
+  if (
+    heavyRain ||
+    rain >= 70 ||
+    precipitation >= 15
+  ) {
+
+    return {
+      score,
+      level: "danger",
+
+      text:
+        "Carry a raincoat.",
+
+      detail:
+        `Rain is likely, with up to ${Math.round(rain)}% precipitation probability.`,
+
+      reason:
+        "High rain risk",
+
+      type: "rain"
+    };
+
+  }
+
+
+  /*
+    HOT DAY
+
+    If the hottest period finishes around
+    4pm, we produce the requested kind
+    of sentence.
+  */
+
+  if (
+    high >= 38 &&
+    hotUntilHour !== null &&
+    hotUntilHour >= 15
+  ) {
+
+    const displayHour =
+      hotUntilHour >= 12
+        ? hotUntilHour > 12
+          ? hotUntilHour - 12
+          : 12
+        : hotUntilHour;
+
+    return {
+      score,
+      level: "warning",
+
+      text:
+        `Avoid being outside before ${displayHour}pm.`,
+
+      detail:
+        `It may feel very hot for much of the afternoon. Plan sightseeing for later in the day.`,
+
+      reason:
+        "Very hot afternoon",
+
+      type: "heat"
+    };
+
+  }
+
+
+  if (high >= 36) {
+
+    return {
+      score,
+      level: "warning",
+
+      text:
+        "Plan outdoor activities early or late.",
+
+      detail:
+        "Temperatures will be high, especially around the afternoon.",
+
+      reason:
+        "High temperatures",
+
+      type: "heat"
+    };
+
+  }
+
+
+  if (rain >= 45 || precipitation >= 5) {
+
+    return {
+      score,
+      level: "warning",
+
+      text:
+        "Carry a raincoat.",
+
+      detail:
+        "There is a meaningful chance of rain, so keep weather protection handy.",
+
+      reason:
+        "Possible rain",
+
+      type: "rain"
+    };
+
+  }
+
+
+  if (wind >= 35) {
+
+    return {
+      score,
+      level: "warning",
+
+      text:
+        "Expect a breezy day.",
+
+      detail:
+        "Strong winds may make exposed outdoor activities less comfortable.",
+
+      reason:
+        "Strong winds",
+
+      type: "wind"
+    };
+
+  }
+
+
+  if (highUV) {
+
+    return {
+      score,
+      level: "warning",
+
+      text:
+        "Good day outdoors — bring sun protection.",
+
+      detail:
+        "UV levels may be high. Carry sunscreen, sunglasses and a hat.",
+
+      reason:
+        "High UV",
+
+      type: "uv"
+    };
+
+  }
+
+
+  /*
+    NORMAL DAY
+
+    This is important because the brief
+    specifically says most days are
+    unremarkable and the app still needs
+    useful wording.
+  */
+
+  return {
+    score,
+    level: "good",
+
+    text:
+      "Good day to be outdoors.",
+
+    detail:
+      "Conditions look comfortable for sightseeing and outdoor plans.",
+
+    reason:
+      "Favourable conditions",
+
+    type: "good"
+  };
+
+}
+
+
+/* =========================
+PACKING ENGINE
+========================= */
+
+function buildPackingList(days) {
+
+  const items = new Map();
+
+
+  function add(
+    key,
+    icon,
+    title,
+    description
+  ) {
+
+    if (!items.has(key)) {
+
+      items.set(key, {
+        icon,
+        title,
+        description
+      });
+
+    }
+
+  }
+
+
+  let rain = false;
+  let hot = false;
+  let sun = false;
+  let cold = false;
+  let wind = false;
+  let storm = false;
+
+
+  days.forEach(day => {
+
+    const verdict =
+      analyzeDay(day);
+
+
+    if (
+      day.rainProbability >= 40 ||
+      day.precipitation >= 3
+    ) {
+      rain = true;
+    }
+
+
+    if (
+      day.high >= 34 ||
+      day.feelsHigh >= 34
+    ) {
+      hot = true;
+    }
+
+
+    if (day.uv >= 6) {
+      sun = true;
+    }
+
+
+    if (day.low <= 10) {
+      cold = true;
+    }
+
+
+    if (day.wind >= 30) {
+      wind = true;
+    }
+
+
+    if (
+      verdict.type === "storm"
+    ) {
+      storm = true;
+    }
+
+  });
+
+
+  /*
+    ALWAYS useful
+  */
+
+  add(
+    "water",
+    "💧",
+    "Reusable water bottle",
+    "Stay hydrated while you're out."
+  );
+
+
+  add(
+    "shoes",
+    "👟",
+    "Comfortable walking shoes",
+    "Useful for sightseeing and long walking days."
+  );
+
+
+  if (rain) {
+
+    add(
+      "raincoat",
+      "🧥",
+      "Raincoat or compact umbrella",
+      "Rain is possible during the trip."
+    );
+
+  }
+
+
+  if (hot) {
+
+    add(
+      "light-clothes",
+      "👕",
+      "Light breathable clothing",
+      "Several days may feel warm or hot."
+    );
+
+  }
+
+
+  if (sun) {
+
+    add(
+      "sunscreen",
+      "🧴",
+      "Sunscreen",
+      "UV levels may be strong."
+    );
+
+    add(
+      "sunglasses",
+      "🕶️",
+      "Sunglasses",
+      "Useful during brighter hours."
+    );
+
+    add(
+      "hat",
+      "🧢",
+      "Hat or cap",
+      "Helpful for sun exposure."
+    );
+
+  }
+
+
+  if (cold) {
+
+    add(
+      "warm-layer",
+      "🧣",
+      "Warm layer",
+      "Cool mornings or evenings are expected."
+    );
+
+  }
+
+
+  if (wind) {
+
+    add(
+      "wind-layer",
+      "🧥",
+      "Light windproof layer",
+      "Some days may be quite windy."
+    );
+
+  }
+
+
+  if (storm) {
+
+    add(
+      "indoor-plan",
+      "🏠",
+      "Indoor backup plans",
+      "Thunderstorms may disrupt outdoor activities."
+    );
+
+  }
+
+
+  return [...items.values()];
+
+}
+
+
+/* =========================
+TRIP VERDICT
+========================= */
+
+function analyzeTrip(days) {
+
+  const analyses =
+    days.map(analyzeDay);
+
+
+  const average =
+    analyses.reduce(
+      (sum, item) => sum + item.score,
+      0
+    ) / analyses.length;
+
+
+  const dangerDays =
+    analyses.filter(
+      item => item.level === "danger"
+    ).length;
+
+
+  const warningDays =
+    analyses.filter(
+      item => item.level === "warning"
+    ).length;
+
+
+  let score =
+    Math.round(average);
+
+
+  /*
+    Several bad days should affect
+    the trip verdict.
+  */
+
+  if (
+    dangerDays >=
+    Math.ceil(days.length * .5)
+  ) {
+
+    score = Math.min(score, 45);
+
+  }
+
+
+  if (
+    dangerDays >=
+    Math.ceil(days.length * .7)
+  ) {
+
+    score = Math.min(score, 30);
+
+  }
+
+
+  let level;
+  let title;
+  let text;
+  let icon;
+  let tag;
+
+
+  if (score >= 75) {
+
+    level = "good";
+
+    tag = "LOOKS GOOD";
+
+    icon = "✓";
+
+    title =
+      "This trip looks good to go.";
+
+    text =
+      `${days.filter((_, i) => analyses[i].level === "good").length} of ${days.length} days look favourable for being out, with no major weather pattern dominating the trip.`;
+
+  }
+
+  else if (score >= 50) {
+
+    level = "moderate";
+
+    tag = "PLAN AROUND IT";
+
+    icon = "◐";
+
+    title =
+      "Go, but plan around the weather.";
+
+    text =
+      `There are some weather interruptions across the trip. Keep your itinerary flexible and use the daily advice below.`;
+
+  }
+
+  else {
+
+    level = "bad";
+
+    tag = "WEATHER CONCERN";
+
+    icon = "!";
+
+    title =
+      "This trip needs careful planning.";
+
+    text =
+      `Several days have conditions that could make outdoor travel uncomfortable or disruptive.`;
+
+  }
+
+
+  return {
+    score,
+    level,
+    title,
+    text,
+    icon,
+    tag,
+    dangerDays,
+    warningDays,
+    analyses
+  };
+
+}
+
+
+/* =========================
+RENDER RESULTS
+========================= */
+
+function renderLocation() {
+
+  const location =
+    state.location;
+
+  countryName.textContent =
+    (
+      location.country_code ||
+      location.country ||
+      ""
+    ).toUpperCase();
+
+  placeName.textContent =
+    location.name;
+
+  tripDates.textContent =
+    state.startDate === state.endDate
+      ? formatLongDate(state.startDate)
+      : `${formatDate(state.startDate)} — ${formatDate(state.endDate)} · ${daysBetween(state.startDate, state.endDate)} days`;
+
+}
+
+
+/* =========================
+RENDER TRIP
+========================= */
+
+function renderTripVerdict() {
+
+  const analysis =
+    analyzeTrip(state.days);
+
+
+  tripScore.textContent =
+    analysis.score;
+
+
+  tripVerdict.className =
+    `trip-verdict ${analysis.level}`;
+
+
+  verdictIcon.textContent =
+    analysis.icon;
+
+  verdictTag.textContent =
+    analysis.tag;
+
+  verdictTitle.textContent =
+    analysis.title;
+
+  verdictText.textContent =
+    analysis.text;
+
+
+  const good =
+    analysis.analyses.filter(
+      item => item.level === "good"
+    ).length;
+
+
+  const warning =
+    analysis.warningDays;
+
+
+  const danger =
+    analysis.dangerDays;
+
+
+  reasonChips.innerHTML = `
+
+    <span class="reason-chip good">
+      ✓ ${good}/${state.days.length} days look favourable
+    </span>
+
+    ${
+      warning
+        ? `
+          <span class="reason-chip warn">
+            ! ${warning} day${warning > 1 ? "s" : ""} need extra planning
+          </span>
+        `
+        : ""
+    }
+
+    ${
+      danger
+        ? `
+          <span class="reason-chip bad">
+            ! ${danger} day${danger > 1 ? "s" : ""} have major weather concerns
+          </span>
+        `
+        : ""
+    }
+
+  `;
+
+}
+
+
+/* =========================
+RENDER DAILY
+========================= */
+
+function renderDaily() {
+
+  const analyses =
+    state.days.map(analyzeDay);
+
+
+  dailyCards.innerHTML =
+    state.days.map((day, index) => {
+
+      const result =
+        analyses[index];
+
+      const info =
+        weatherInfo(day.weatherCode);
+
+
+      const high =
+        convertTemperature(day.high);
+
+      const low =
+        convertTemperature(day.low);
+
 
       return `
-        <div
-          class="suggestion-item"
-          data-location-index="${index}"
-          role="button"
-          tabindex="0"
+
+        <article
+          class="day-card ${result.level === "good" ? "best" : ""}"
         >
-          <div class="suggestion-pin">⌖</div>
-          <div class="suggestion-text">
-            <strong>${escapeHTML(location.name || "Unknown")}</strong>
-            <span>${escapeHTML([admin, country].filter(Boolean).join(", "))}</span>
+
+          <div class="day-top">
+
+            <div>
+              <div class="day-name">
+                ${dayName(day.date).toUpperCase()}
+              </div>
+
+              <div class="day-date">
+                ${formatDate(day.date)}
+              </div>
+            </div>
+
           </div>
-        </div>
+
+
+          <div class="day-weather">
+
+            <div class="weather-icon">
+              ${info[0]}
+            </div>
+
+            <div>
+
+              <div class="temperature">
+                ${high}°
+                <small>${low}°</small>
+              </div>
+
+              <div class="condition">
+                ${info[1]}
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div
+            class="
+              day-verdict
+              ${result.level === "warning" ? "warning" : ""}
+              ${result.level === "danger" ? "danger" : ""}
+            "
+          >
+
+            <div class="verdict-text">
+              ${result.text}
+            </div>
+
+            <div class="verdict-detail">
+              ${result.detail}
+            </div>
+
+          </div>
+
+
+          <div class="day-metrics">
+
+            <div class="day-metric">
+
+              <span>RAIN</span>
+
+              <strong>
+                ${Math.round(day.rainProbability)}%
+              </strong>
+
+            </div>
+
+
+            <div class="day-metric">
+
+              <span>WIND</span>
+
+              <strong>
+                ${Math.round(day.wind)} km/h
+              </strong>
+
+            </div>
+
+
+            <div class="day-metric">
+
+              <span>UV</span>
+
+              <strong>
+                ${Math.round(day.uv)}
+              </strong>
+
+            </div>
+
+          </div>
+
+        </article>
+
       `;
-    })
-    .join("");
 
-  elements.locationSuggestions.classList.remove("hidden");
+    }).join("");
 
-  elements.locationSuggestions.querySelectorAll("[data-location-index]").forEach((item) => {
-    item.addEventListener("click", () => {
-      const index = Number(item.dataset.locationIndex);
-      const location = results[index];
-
-      state.location = location;
-      elements.destination.value = location.name;
-      elements.clearDestination.classList.remove("hidden");
-      elements.locationSuggestions.classList.add("hidden");
-    });
-  });
 }
 
+
+/* =========================
+RENDER PACKING
+========================= */
+
+function renderPacking() {
+
+  const items =
+    buildPackingList(state.days);
+
+
+  packingList.innerHTML =
+    items.map(item => `
+
+      <div class="pack-item">
+
+        <div class="pack-icon">
+          ${item.icon}
+        </div>
+
+        <strong>
+          ${item.title}
+        </strong>
+
+        <p>
+          ${item.description}
+        </p>
+
+      </div>
+
+    `).join("");
+
+}
+
+
+/* =========================
+BEST / WORST
+========================= */
+
+function renderHighlights() {
+
+  const ranked =
+    state.days
+      .map(day => ({
+        day,
+        result: analyzeDay(day)
+      }))
+      .sort(
+        (a,b) =>
+          b.result.score -
+          a.result.score
+      );
+
+
+  const best =
+    ranked[0];
+
+  const worst =
+    ranked[ranked.length - 1];
+
+
+  if (best) {
+
+    bestDay.textContent =
+      `${dayName(best.day.date)}, ${formatDate(best.day.date)}`;
+
+    bestDayText.textContent =
+      best.result.text;
+
+  }
+
+
+  if (worst) {
+
+    worstDay.textContent =
+      `${dayName(worst.day.date)}, ${formatDate(worst.day.date)}`;
+
+    worstDayText.textContent =
+      worst.result.text;
+
+  }
+
+}
+
+
+/* =========================
+TEMPERATURE
+========================= */
+
+function convertTemperature(value) {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "--";
+  }
+
+
+  if (
+    state.unit === "fahrenheit"
+  ) {
+
+    return Math.round(
+      value * 9 / 5 + 32
+    );
+
+  }
+
+
+  return Math.round(value);
+
+}
+
+
+/* =========================
+SEARCH
+========================= */
+
+async function search() {
+
+  const city =
+    cityInput.value.trim();
+
+
+  if (!city) {
+
+    showError(
+      "Destination required",
+      "Enter a city to analyse your trip."
+    );
+
+    return;
+
+  }
+
+
+  const start =
+    startDate.value;
+
+  const end =
+    endDate.value;
+
+
+  if (!start || !end) {
+
+    showError(
+      "Choose your dates",
+      "Select both your start and end date."
+    );
+
+    return;
+
+  }
+
+
+  if (end < start) {
+
+    showError(
+      "Invalid dates",
+      "Your end date must be after your start date."
+    );
+
+    return;
+
+  }
+
+
+  const numberOfDays =
+    daysBetween(start, end);
+
+
+  if (numberOfDays > 14) {
+
+    showError(
+      "That's too far ahead",
+      "Choose a trip of 14 days or fewer. Forecast data beyond the available range should not be presented as reliable."
+    );
+
+    return;
+
+  }
+
+
+  state.startDate = start;
+  state.endDate = end;
+
+
+  setLoading(true);
+
+
+  try {
+
+    let location =
+      state.location;
+
+
+    /*
+      IMPORTANT:
+
+      Don't silently accept a stale selection.
+    */
+
+    if (
+      !location ||
+      location.name.toLowerCase() !==
+      city.toLowerCase()
+    ) {
+
+      const cities =
+        await searchCities(city);
+
+
+      if (!cities.length) {
+
+        throw new Error(
+          "CITY_NOT_FOUND"
+        );
+
+      }
+
+
+      /*
+        If multiple meaningful locations
+        exist, show choices rather than
+        silently choosing the first one.
+      */
+
+      if (
+        cities.length > 1 &&
+        !state.location
+      ) {
+
+        renderSuggestions(cities);
+
+        setLoading(false);
+
+        showError(
+          "Choose your destination",
+          "We found several places with that name. Select the correct city from the suggestions."
+        );
+
+        return;
+
+      }
+
+
+      location =
+        cities[0];
+
+      state.location =
+        location;
+
+    }
+
+
+    state.weather =
+      await getWeather(location);
+
+
+    state.days =
+      state.weather.daily.time
+        .map((_, index) =>
+          createDay(index)
+        );
+
+
+    state.lastSearch = {
+      city,
+      start,
+      end
+    };
+
+
+    renderLocation();
+
+    renderTripVerdict();
+
+    renderDaily();
+
+    renderPacking();
+
+    renderHighlights();
+
+
+    errorState.classList.add(
+      "hidden"
+    );
+
+    results.classList.remove(
+      "hidden"
+    );
+
+
+    results.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+
+
+    showToast(
+      "Trip analysed successfully"
+    );
+
+
+  } catch (error) {
+
+    console.error(error);
+
+
+    if (
+      error.message ===
+      "CITY_NOT_FOUND"
+    ) {
+
+      showError(
+        "We couldn't find that city",
+        "Check the spelling or try including the country name."
+      );
+
+    } else {
+
+      showError(
+        "Weather unavailable",
+        "The live weather service didn't respond. Check your connection and try again."
+      );
+
+    }
+
+  } finally {
+
+    setLoading(false);
+
+  }
+
+}
+
+
+/* =========================
+LOADING
+========================= */
+
+function setLoading(loading) {
+
+  submitBtn.disabled =
+    loading;
+
+  cityInput.disabled =
+    loading;
+
+  startDate.disabled =
+    loading;
+
+  endDate.disabled =
+    loading;
+
+
+  if (loading) {
+
+    submitText.classList.add(
+      "hidden"
+    );
+
+    loader.classList.remove(
+      "hidden"
+    );
+
+  } else {
+
+    submitText.classList.remove(
+      "hidden"
+    );
+
+    loader.classList.add(
+      "hidden"
+    );
+
+  }
+
+}
+
+
+/* =========================
+ERROR
+========================= */
+
+function showError(title, message) {
+
+  errorTitle.textContent =
+    title;
+
+  errorMessage.textContent =
+    message;
+
+  errorState.classList.remove(
+    "hidden"
+  );
+
+
+  results.classList.add(
+    "hidden"
+  );
+
+
+  errorState.scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
+
+}
+
+
+/* =========================
+SUBMIT
+========================= */
+
+searchForm.addEventListener(
+  "submit",
+  event => {
+
+    event.preventDefault();
+
+    search();
+
+  }
+);
+
+
+/* =========================
+RETRY
+========================= */
+
+retryBtn.addEventListener(
+  "click",
+  () => {
+
+    if (state.lastSearch) {
+
+      cityInput.value =
+        state.lastSearch.city;
+
+      startDate.value =
+        state.lastSearch.start;
+
+      endDate.value =
+        state.lastSearch.end;
+
+    }
+
+    search();
+
+  }
+);
+
+
+/* =========================
+SCROLL
+========================= */
+
+$("#scrollLeft").addEventListener(
+  "click",
+  () => {
+
+    dailyCards.scrollBy({
+      left: -320,
+      behavior: "smooth"
+    });
+
+  }
+);
+
+
+$("#scrollRight").addEventListener(
+  "click",
+  () => {
+
+    dailyCards.scrollBy({
+      left: 320,
+      behavior: "smooth"
+    });
+
+  }
+);
+
+
+/* =========================
+UNIT
+========================= */
+
+unitBtn.addEventListener(
+  "click",
+  () => {
+
+    state.unit =
+      state.unit === "celsius"
+        ? "fahrenheit"
+        : "celsius";
+
+
+    unitBtn.textContent =
+      state.unit === "celsius"
+        ? "°C"
+        : "°F";
+
+
+    if (state.days.length) {
+
+      renderDaily();
+
+    }
+
+  }
+);
+
+
+/* =========================
+TOAST
+========================= */
+
+function showToast(message) {
+
+  toast.textContent =
+    message;
+
+  toast.classList.remove(
+    "hidden"
+  );
+
+
+  setTimeout(() => {
+
+    toast.classList.add(
+      "hidden"
+    );
+
+  }, 2800);
+
+}
+
+
+/* =========================
+ESCAPE HTML
+========================= */
+
 function escapeHTML(value) {
+
   return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+
 }
-
-async function handleDestinationInput() {
-  const query = elements.destination.value.trim();
-
-  elements.clearDestination.classList.toggle("hidden", !query);
-
-  state.location = null;
-
-  if (query.length < 2) {
-    elements.locationSuggestions.classList.add("hidden");
-    return;
-  }
-
-  clearTimeout(state.searchTimeout);
-
-  state.searchTimeout = setTimeout(async () => {
-    try {
-      const results = await searchLocations(query);
-      renderLocationSuggestions(results);
-    } catch (error) {
-      elements.locationSuggestions.classList.add("hidden");
-    }
-  }, 350);
-}
-
-/* =========================================
-   MAIN SEARCH
-========================================= */
-
-async function handleSearch(event) {
-  event.preventDefault();
-
-  if (state.isLoading) return;
-
-  const destination = elements.destination.value.trim();
-  const startDate = elements.startDate.value;
-  const endDate = elements.endDate.value;
-
-  if (!destination) {
-    showError("Destination required", "Please enter a city to view its forecast.");
-    return;
-  }
-
-  if (!startDate || !endDate) {
-    showError("Dates required", "Please select both a start and end date.");
-    return;
-  }
-
-  if (endDate < startDate) {
-    showError("Invalid date range", "The end date must be after the start date.");
-    return;
-  }
-
-  const days = getDaysBetween(startDate, endDate);
-
-  if (days > 14) {
-    showError(
-      "Forecast range too long",
-      "Please select a range of 14 days or fewer. Open-Meteo provides forecasts up to 14 days here."
-    );
-    return;
-  }
-
-  state.selectedStartDate = startDate;
-  state.selectedEndDate = endDate;
-
-  setLoading(true);
-
-  try {
-    let location = state.location;
-
-    if (!location || location.name.toLowerCase() !== destination.toLowerCase()) {
-      const results = await searchLocations(destination);
-
-      if (!results.length) {
-        throw new Error("No location found");
-      }
-
-      location = results[0];
-      state.location = location;
-    }
-
-    const weather = await fetchWeather(location.latitude, location.longitude);
-
-    state.weather = weather;
-    state.lastSearch = {
-      destination,
-      startDate,
-      endDate
-    };
-
-    renderAll();
-    showResults();
-
-    elements.resultsSection.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
-    });
-
-    showToast("Forecast updated successfully");
-  } catch (error) {
-    console.error(error);
-
-    showError(
-      "Forecast unavailable",
-      "We couldn't retrieve weather data for this location. Please check your city name or try again."
-    );
-  } finally {
-    setLoading(false);
-  }
-}
-
-/* =========================================
-   RENDER ALL
-========================================= */
-
-function renderAll() {
-  renderLocation();
-  renderCurrentWeather();
-  renderDecision();
-  renderMetrics();
-  renderForecastCards();
-  renderChart();
-  renderSunData();
-  renderRecommendations();
-  renderWeatherNotes();
-
-  elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit"
-  })}`;
-}
-
-/* =========================================
-   LOCATION RENDER
-========================================= */
-
-function renderLocation() {
-  const location = state.location;
-
-  if (!location) return;
-
-  elements.locationName.textContent = location.name || "Unknown location";
-
-  elements.locationCountry.textContent = (
-    location.country_code ||
-    location.country ||
-    "WORLD"
-  ).toUpperCase();
-
-  elements.locationCoordinates.textContent =
-    `${Number(location.latitude).toFixed(2)}° ${location.latitude >= 0 ? "N" : "S"}   ` +
-    `${Number(Math.abs(location.longitude)).toFixed(2)}° ${location.longitude >= 0 ? "E" : "W"}`;
-
-  const start = state.selectedStartDate;
-  const end = state.selectedEndDate;
-
-  if (start === end) {
-    elements.dateRangeText.textContent = formatLongDate(start);
-  } else {
-    elements.dateRangeText.textContent =
-      `${formatDate(start)} — ${formatDate(end)} · ${getDaysBetween(start, end)} days`;
-  }
-
-  elements.currentLocationText.textContent =
-    `${location.name || "Your destination"} · Live conditions`;
-}
-
-/* =========================================
-   CURRENT WEATHER
-========================================= */
-
-function renderCurrentWeather() {
-  const weather = state.weather;
-
-  if (!weather || !weather.current) return;
-
-  const current = weather.current;
-  const weatherInfo = getWeatherInfo(current.weather_code, Boolean(current.is_day));
-
-  elements.currentWeatherIcon.textContent = weatherInfo.icon;
-  elements.currentTemperature.textContent = convertTemperature(current.temperature_2m);
-  elements.currentCondition.textContent = weatherInfo.label;
-  elements.feelsLike.textContent = formatTemperature(current.apparent_temperature);
-  elements.currentHumidity.textContent = `${Math.round(current.relative_humidity_2m)}%`;
-  elements.currentWind.textContent = formatWind(current.wind_speed_10m);
-
-  const todayIndex = getTodayForecastIndex();
-
-  if (
-    todayIndex !== -1 &&
-    weather.daily &&
-    weather.daily.uv_index_max
-  ) {
-    elements.currentUV.textContent = formatUV(weather.daily.uv_index_max[todayIndex]);
-  } else {
-    elements.currentUV.textContent = "--";
-  }
-
-  const timezone = weather.timezone_abbreviation || weather.timezone || "";
-
-  elements.currentTime.textContent = timezone
-    ? `${formatTime(current.time)} ${timezone}`
-    : formatTime(current.time);
-}
-
-function formatUV(uv) {
-  if (uv === null || uv === undefined) return "--";
-
-  const value = Number(uv);
-
-  if (value < 3) return `${Math.round(value)} · Low`;
-  if (value < 6) return `${Math.round(value)} · Moderate`;
-  if (value < 8) return `${Math.round(value)} · High`;
-  if (value < 11) return `${Math.round(value)} · Very high`;
-
-  return `${Math.round(value)} · Extreme`;
-}
-
-function getTodayForecastIndex() {
-  if (!state.weather || !state.weather.daily) return -1;
-
-  const today = dateToInputValue(new Date());
-
-  return state.weather.daily.time.indexOf(today);
-}
-
-/* =========================================
-   FORECAST DATA
-========================================= */
-
-function getForecastDays() {
-  const daily = state.weather?.daily;
-
-  if (!daily || !daily.time) return [];
-
-  return daily.time.map((date, index) => ({
-    date,
-    weatherCode: daily.weather_code?.[index] ?? 0,
-    high: daily.temperature_2m_max?.[index] ?? null,
-    low: daily.temperature_2m_min?.[index] ?? null,
-    feelsHigh: daily.apparent_temperature_max?.[index] ?? null,
-    feelsLow: daily.apparent_temperature_min?.[index] ?? null,
-    sunrise: daily.sunrise?.[index] ?? null,
-    sunset: daily.sunset?.[index] ?? null,
-    daylightDuration: daily.daylight_duration?.[index] ?? null,
-    precipitation: daily.precipitation_sum?.[index] ?? 0,
-    rain: daily.rain_sum?.[index] ?? 0,
-    showers: daily.showers_sum?.[index] ?? 0,
-    snow: daily.snowfall_sum?.[index] ?? 0,
-    rainProbability: daily.precipitation_probability_max?.[index] ?? 0,
-    windMax: daily.wind_speed_10m_max?.[index] ?? 0,
-    uvMax: daily.uv_index_max?.[index] ?? 0
-  }));
-}
-
-function getSelectedForecastDays() {
-  const allDays = state.forecastDays.length
-    ? state.forecastDays
-    : getForecastDays();
-
-  return allDays.filter((day) =>
-    isDateInRange(
-      day.date,
-      state.selectedStartDate,
-      state.selectedEndDate
-    )
-  );
-}
-
-/* =========================================
-   DECISION ENGINE
-========================================= */
-
-function calculateTravelScore(days) {
-  if (!days.length) {
-    return {
-      score: 0,
-      category: "moderate",
-      title: "Not enough data",
-      description: "We need a valid forecast period to make a recommendation.",
-      footer: "Select a valid date range and try again."
-    };
-  }
-
-  let score = 100;
-
-  let rainyDays = 0;
-  let stormDays = 0;
-  let snowDays = 0;
-  let extremeHeatDays = 0;
-  let extremeColdDays = 0;
-  let highWindDays = 0;
-  let highUVDays = 0;
-
-  let totalRainProbability = 0;
-  let totalRainAmount = 0;
-
-  days.forEach((day) => {
-    const info = getWeatherInfo(day.weatherCode);
-
-    totalRainProbability += Number(day.rainProbability || 0);
-    totalRainAmount += Number(day.precipitation || 0);
-
-    if (info.type === "rain") {
-      rainyDays++;
-      score -= 7;
-    }
-
-    if (info.type === "storm") {
-      stormDays++;
-      score -= 18;
-    }
-
-    if (info.type === "snow") {
-      snowDays++;
-      score -= 10;
-    }
-
-    if (day.high >= 40) {
-      extremeHeatDays++;
-      score -= 8;
-    } else if (day.high >= 36) {
-      score -= 3;
-    }
-
-    if (day.low <= 2) {
-      extremeColdDays++;
-      score -= 7;
-    }
-
-    if (day.windMax >= 40) {
-      highWindDays++;
-      score -= 6;
-    }
-
-    if (day.uvMax >= 8) {
-      highUVDays++;
-      score -= 2;
-    }
-  });
-
-  const averageRainProbability = totalRainProbability / days.length;
-
-  if (averageRainProbability > 65) {
-    score -= 8;
-  } else if (averageRainProbability > 45) {
-    score -= 4;
-  }
-
-  if (totalRainAmount > 50) {
-    score -= 10;
-  } else if (totalRainAmount > 25) {
-    score -= 5;
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  let category = "good";
-  let title = "Looks good to go.";
-  let description = "The forecast looks friendly for making plans.";
-  let footer = "Pack thoughtfully and enjoy the journey.";
-
-  if (score < 45) {
-    category = "bad";
-    title = "Consider another window.";
-    description = "Several challenging conditions could affect your plans.";
-    footer = "If you travel, keep your plans flexible and check updates.";
-  } else if (score < 70) {
-    category = "moderate";
-    title = "Go, with a little planning.";
-    description = "There are some weather variables worth preparing for.";
-    footer = "A flexible itinerary and the right gear will help.";
-  }
-
-  if (stormDays > 0) {
-    category = "bad";
-    title = "Storms are in the picture.";
-    description = "Thunderstorm conditions may affect outdoor activities.";
-    footer = "Keep an eye on local alerts before heading out.";
-  }
-
-  if (extremeHeatDays >= Math.ceil(days.length / 2)) {
-    category = score >= 55 ? "moderate" : "bad";
-    title = "Plan around the heat.";
-    description = "High temperatures could make outdoor plans uncomfortable.";
-    footer = "Prioritise shade, hydration and early or late activities.";
-  }
-
-  return {
-    score,
-    category,
-    title,
-    description,
-    footer,
-    rainyDays,
-    stormDays,
-    snowDays,
-    extremeHeatDays,
-    extremeColdDays,
-    highWindDays,
-    highUVDays,
-    averageRainProbability,
-    totalRainAmount
-  };
-}
-
-function renderDecision() {
-  const days = getSelectedForecastDays();
-  const result = calculateTravelScore(days);
-
-  elements.decisionCard.classList.remove("good", "moderate", "bad");
-  elements.decisionCard.classList.add(result.category);
-
-  elements.decisionBadgeText.textContent =
-    result.category === "good"
-      ? "FAVOURABLE CONDITIONS"
-      : result.category === "moderate"
-        ? "MIXED CONDITIONS"
-        : "CAUTION ADVISED";
-
-  elements.decisionTitle.textContent = result.title;
-  elements.decisionDescription.textContent = result.description;
-  elements.decisionScore.textContent = result.score;
-  elements.scoreFill.style.width = `${result.score}%`;
-  elements.decisionFooter.textContent = result.footer;
-}
-
-/* =========================================
-   METRICS
-========================================= */
-
-function renderMetrics() {
-  const days = getSelectedForecastDays();
-
-  if (!days.length) return;
-
-  const highs = days.map((day) => day.high).filter(Number.isFinite);
-  const lows = days.map((day) => day.low).filter(Number.isFinite);
-  const rainProbabilities = days.map((day) => day.rainProbability).filter(Number.isFinite);
-  const winds = days.map((day) => day.windMax).filter(Number.isFinite);
-
-  const minTemp = Math.min(...lows);
-  const maxTemp = Math.max(...highs);
-
-  const averageRain = rainProbabilities.length
-    ? Math.round(rainProbabilities.reduce((a, b) => a + b, 0) / rainProbabilities.length)
-    : 0;
-
-  const averageWind = winds.length
-    ? Math.round(winds.reduce((a, b) => a + b, 0) / winds.length)
-    : 0;
-
-  const bestDay = [...days].sort((a, b) => {
-    const scoreA = getDayComfortScore(a);
-    const scoreB = getDayComfortScore(b);
-    return scoreB - scoreA;
-  })[0];
-
-  elements.rangeMetric.textContent =
-    `${formatTemperature(minTemp)} / ${formatTemperature(maxTemp)}`;
-
-  elements.rainMetric.textContent = `${averageRain}%`;
-  elements.windMetric.textContent = `${averageWind} km/h`;
-  elements.bestDayMetric.textContent = bestDay ? formatDay(bestDay.date) : "--";
-}
-
-function getDayComfortScore(day) {
-  let score = 100;
-
-  const info = getWeatherInfo(day.weatherCode);
-
-  if (info.type === "rain") score -= 30;
-  if (info.type === "storm") score -= 60;
-  if (info.type === "snow") score -= 25;
-  if (day.rainProbability > 60) score -= 20;
-  if (day.high > 38) score -= 20;
-  if (day.high > 42) score -= 25;
-  if (day.low < 4) score -= 15;
-  if (day.windMax > 35) score -= 15;
-  if (day.uvMax > 9) score -= 5;
-
-  const idealDistance = Math.abs((day.high + day.low) / 2 - 25);
-  score -= idealDistance * 1.5;
-
-  return score;
-}
-
-/* =========================================
-   FORECAST CARDS
-========================================= */
-
-function renderForecastCards() {
-  const days = getSelectedForecastDays();
-
-  if (!days.length) {
-    elements.forecastCards.innerHTML = `
-      <div class="forecast-card">
-        No forecast available.
-      </div>
-    `;
-    return;
-  }
-
-  const today = dateToInputValue(new Date());
-
-  elements.forecastCards.innerHTML = days
-    .map((day) => {
-      const info = getWeatherInfo(day.weatherCode);
-      const isToday = day.date === today;
-
-      return `
-        <div class="forecast-card ${isToday ? "today" : ""}">
-          <div class="forecast-day">${isToday ? "TODAY" : formatDay(day.date).toUpperCase()}</div>
-          <div class="forecast-date">${formatDate(day.date)}</div>
-          <div class="forecast-icon">${info.icon}</div>
-          <div class="forecast-condition">${info.label}</div>
-          <div class="forecast-temperatures">
-            <span class="forecast-high">${formatTemperature(day.high)}</span>
-            <span class="forecast-low">${formatTemperature(day.low)}</span>
-          </div>
-          <div class="forecast-rain">
-            <span>💧</span>
-            <span>${Math.round(day.rainProbability)}%</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-/* =========================================
-   TEMPERATURE CHART
-========================================= */
-
-function renderChart() {
-  const days = getSelectedForecastDays();
-
-  if (!days.length) return;
-
-  const highs = days.map((day) => convertTemperature(day.high));
-  const lows = days.map((day) => convertTemperature(day.low));
-
-  const allValues = [...highs, ...lows].filter(Number.isFinite);
-
-  if (!allValues.length) return;
-
-  const max = Math.max(...allValues);
-  const min = Math.min(...allValues);
-
-  const padding = Math.max(4, Math.round((max - min) * 0.18));
-  const chartMax = max + padding;
-  const chartMin = min - padding;
-  const chartRange = Math.max(1, chartMax - chartMin);
-
-  const chartLabels = [
-    chartMax,
-    Math.round(chartMax - chartRange / 3),
-    Math.round(chartMax - (chartRange * 2) / 3),
-    chartMin
-  ];
-
-  elements.chartY1.textContent = `${chartLabels[0]}°`;
-  elements.chartY2.textContent = `${chartLabels[1]}°`;
-  elements.chartY3.textContent = `${chartLabels[2]}°`;
-  elements.chartY4.textContent = `${chartLabels[3]}°`;
-
-  elements.chartBars.innerHTML = days
-    .map((day) => {
-      const high = convertTemperature(day.high);
-      const low = convertTemperature(day.low);
-
-      const highHeight = ((high - chartMin) / chartRange) * 100;
-      const lowHeight = ((low - chartMin) / chartRange) * 100;
-
-      return `
-        <div class="chart-bar-group">
-          <div class="chart-tooltip">${high}${temperatureUnit()}</div>
-          <div class="chart-bar low" style="height: ${Math.max(5, lowHeight)}%"></div>
-          <div class="chart-bar high" style="height: ${Math.max(5, highHeight)}%"></div>
-        </div>
-      `;
-    })
-    .join("");
-
-  elements.chartXLabels.innerHTML = days
-    .map((day) => {
-      return `<span>${formatDay(day.date)}</span>`;
-    })
-    .join("");
-}
-
-/* =========================================
-   SUN DATA
-========================================= */
-
-function renderSunData() {
-  const days = getSelectedForecastDays();
-
-  if (!days.length) return;
-
-  const firstDay = days[0];
-
-  elements.sunriseTime.textContent = formatTime(firstDay.sunrise);
-  elements.sunsetTime.textContent = formatTime(firstDay.sunset);
-
-  const duration = Number(firstDay.daylightDuration || 0);
-
-  if (duration > 0) {
-    const hours = Math.floor(duration / 3600);
-    const minutes = Math.round((duration % 3600) / 60);
-
-    elements.daylightDuration.textContent =
-      `${hours}h ${pad(minutes)}m`;
-  } else {
-    elements.daylightDuration.textContent = "-- hours";
-  }
-
-  const sunriseHour = Number(formatTime(firstDay.sunrise).split(":")[0]) || 6;
-  const sunsetHour = Number(formatTime(firstDay.sunset).split(":")[0]) || 18;
-
-  const currentHour = new Date().getHours();
-  const daylightProgress =
-    ((currentHour - sunriseHour) / Math.max(1, sunsetHour - sunriseHour)) * 100;
-
-  const clampedProgress = Math.max(10, Math.min(90, daylightProgress));
-
-  elements.sunBall.style.left = `${clampedProgress}%`;
-}
-
-/* =========================================
-   RECOMMENDATIONS
-========================================= */
-
-function renderRecommendations() {
-  const days = getSelectedForecastDays();
-  const result = calculateTravelScore(days);
-
-  if (!days.length) return;
-
-  const averageHigh =
-    days.reduce((sum, day) => sum + Number(day.high || 0), 0) / days.length;
-
-  const averageLow =
-    days.reduce((sum, day) => sum + Number(day.low || 0), 0) / days.length;
-
-  const averageRain =
-    days.reduce((sum, day) => sum + Number(day.rainProbability || 0), 0) / days.length;
-
-  let clothingIcon = "🧥";
-  let clothingTitle = "Layer up";
-  let clothingText = "Bring light layers so you can adjust comfortably through the day.";
-
-  if (averageHigh >= 34) {
-    clothingIcon = "🧢";
-    clothingTitle = "Keep it light";
-    clothingText = "Breathable clothing, sunglasses and sun protection are a good idea.";
-  } else if (averageHigh >= 25) {
-    clothingIcon = "👕";
-    clothingTitle = "Comfortable layers";
-    clothingText = "Light clothing with a thin layer for cooler mornings should work well.";
-  } else if (averageHigh <= 12) {
-    clothingIcon = "🧣";
-    clothingTitle = "Dress warmly";
-    clothingText = "Pack warm layers, especially for mornings and evenings.";
-  }
-
-  let activityIcon = "🥾";
-  let activityTitle = "Outdoor plans";
-  let activityText = "The forecast supports exploring outdoors and making the most of the day.";
-
-  if (result.stormDays > 0) {
-    activityIcon = "🏠";
-    activityTitle = "Keep plans flexible";
-    activityText = "Thunderstorm conditions may interrupt outdoor plans. Have an indoor backup.";
-  } else if (averageRain >= 60) {
-    activityIcon = "☔";
-    activityTitle = "Rain-ready itinerary";
-    activityText = "Choose activities with shelter nearby and keep an umbrella or rain jacket handy.";
-  } else if (averageHigh >= 37) {
-    activityIcon = "🌴";
-    activityTitle = "Beat the heat";
-    activityText = "Plan outdoor activities early or late and keep indoor breaks in your schedule.";
-  }
-
-  let essentialsIcon = "🎒";
-  let essentialsTitle = "Travel essentials";
-  let essentialsText = "Carry water, comfortable shoes and a small day bag for your plans.";
-
-  if (averageRain >= 50) {
-    essentialsIcon = "☔";
-    essentialsTitle = "Rain protection";
-    essentialsText = "An umbrella, waterproof bag cover and quick-drying footwear will help.";
-  } else if (result.highUVDays > 0) {
-    essentialsIcon = "🧴";
-    essentialsTitle = "Sun protection";
-    essentialsText = "Sunscreen, sunglasses and a hat are worth packing for brighter hours.";
-  } else if (averageLow <= 8) {
-    essentialsIcon = "🧤";
-    essentialsTitle = "Warmth for evenings";
-    essentialsText = "Keep a warm outer layer nearby for after sunset.";
-  }
-
-  elements.recommendationSubtitle.textContent =
-    `${formatDate(state.selectedStartDate)} to ${formatDate(state.selectedEndDate)} · Personalised from your forecast`;
-
-  elements.recommendationGrid.innerHTML = `
-    <div class="recommendation-item">
-      <div class="recommendation-item-icon">${clothingIcon}</div>
-      <h3>${clothingTitle}</h3>
-      <p>${clothingText}</p>
-    </div>
-
-    <div class="recommendation-item">
-      <div class="recommendation-item-icon">${activityIcon}</div>
-      <h3>${activityTitle}</h3>
-      <p>${activityText}</p>
-    </div>
-
-    <div class="recommendation-item">
-      <div class="recommendation-item-icon">${essentialsIcon}</div>
-      <h3>${essentialsTitle}</h3>
-      <p>${essentialsText}</p>
-    </div>
-  `;
-}
-
-/* =========================================
-   WEATHER NOTES
-========================================= */
-
-function renderWeatherNotes() {
-  const days = getSelectedForecastDays();
-  const result = calculateTravelScore(days);
-
-  if (!days.length) return;
-
-  const hottestDay = [...days].sort((a, b) => b.high - a.high)[0];
-  const wettestDay = [...days].sort((a, b) => b.precipitation - a.precipitation)[0];
-  const windiestDay = [...days].sort((a, b) => b.windMax - a.windMax)[0];
-
-  const notes = [];
-
-  if (hottestDay) {
-    notes.push({
-      title: "Warmest day",
-      text: `${formatDay(hottestDay.date)} looks warmest, reaching ${formatTemperature(hottestDay.high)}.`
-    });
-  }
-
-  if (wettestDay && wettestDay.precipitation > 0) {
-    notes.push({
-      title: "Rain watch",
-      text: `${formatDay(wettestDay.date)} has the highest expected precipitation at ${Math.round(wettestDay.rainProbability)}% probability.`
-    });
-  } else {
-    notes.push({
-      title: "Rain outlook",
-      text: "The selected period shows little or no expected precipitation."
-    });
-  }
-
-  if (result.highWindDays > 0) {
-    notes.push({
-      title: "Wind advisory",
-      text: "Some days may be breezy. Take extra care with exposed outdoor activities."
-    });
-  } else if (result.highUVDays > 0) {
-    notes.push({
-      title: "UV awareness",
-      text: "UV levels may be high on some days. Plan shade breaks and use sun protection."
-    });
-  } else {
-    notes.push({
-      title: "Comfort outlook",
-      text: "No major weather disruptions stand out across the selected forecast period."
-    });
-  }
-
-  elements.notesGrid.innerHTML = notes
-    .map((note) => {
-      return `
-        <div class="note-item">
-          <h3>${note.title}</h3>
-          <p>${note.text}</p>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-/* =========================================
-   THEME
-========================================= */
-
-function initializeTheme() {
-  const savedTheme = localStorage.getItem("wayfarer-theme");
-
-  if (savedTheme === "light") {
-    elements.body.classList.add("light-theme");
-    elements.moonIcon.classList.add("hidden");
-    elements.sunIcon.classList.remove("hidden");
-  }
-}
-
-function toggleTheme() {
-  const isLight = elements.body.classList.toggle("light-theme");
-
-  localStorage.setItem("wayfarer-theme", isLight ? "light" : "dark");
-
-  elements.moonIcon.classList.toggle("hidden", isLight);
-  elements.sunIcon.classList.toggle("hidden", !isLight);
-}
-
-/* =========================================
-   UNIT TOGGLE
-========================================= */
-
-function updateUnitToggle() {
-  const isFahrenheit = state.unit === "fahrenheit";
-
-  elements.unitToggle.innerHTML = `
-    <span class="${!isFahrenheit ? "unit-active" : ""}">°C</span>
-    <span>/</span>
-    <span class="${isFahrenheit ? "unit-active" : ""}">°F</span>
-  `;
-}
-
-function toggleUnit() {
-  state.unit = state.unit === "celsius" ? "fahrenheit" : "celsius";
-
-  updateUnitToggle();
-
-  if (state.weather) {
-    renderAll();
-    showToast(`Temperature switched to ${state.unit === "celsius" ? "Celsius" : "Fahrenheit"}`);
-  }
-}
-
-/* =========================================
-   EVENT LISTENERS
-========================================= */
-
-elements.searchForm.addEventListener("submit", handleSearch);
-
-elements.destination.addEventListener("input", handleDestinationInput);
-
-elements.destination.addEventListener("focus", () => {
-  if (elements.destination.value.trim().length >= 2) {
-    handleDestinationInput();
-  }
-});
-
-elements.clearDestination.addEventListener("click", () => {
-  elements.destination.value = "";
-  elements.destination.focus();
-  state.location = null;
-  elements.clearDestination.classList.add("hidden");
-  elements.locationSuggestions.classList.add("hidden");
-});
-
-elements.retryButton.addEventListener("click", () => {
-  if (state.lastSearch) {
-    elements.destination.value = state.lastSearch.destination;
-    elements.startDate.value = state.lastSearch.startDate;
-    elements.endDate.value = state.lastSearch.endDate;
-
-    handleSearch(new Event("submit", {
-      cancelable: true
-    }));
-  } else {
-    handleSearch(new Event("submit", {
-      cancelable: true
-    }));
-  }
-});
-
-elements.themeButton.addEventListener("click", toggleTheme);
-elements.unitToggle.addEventListener("click", toggleUnit);
-
-elements.scrollLeft.addEventListener("click", () => {
-  elements.forecastScroll.scrollBy({
-    left: -350,
-    behavior: "smooth"
-  });
-});
-
-elements.scrollRight.addEventListener("click", () => {
-  elements.forecastScroll.scrollBy({
-    left: 350,
-    behavior: "smooth"
-  });
-});
-
-elements.startDate.addEventListener("change", () => {
-  const start = elements.startDate.value;
-
-  if (!start) return;
-
-  elements.endDate.min = start;
-
-  if (elements.endDate.value < start) {
-    elements.endDate.value = start;
-  }
-});
-
-document.addEventListener("click", (event) => {
-  if (!event.target.closest(".destination-field")) {
-    elements.locationSuggestions.classList.add("hidden");
-  }
-});
-
-window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    elements.locationSuggestions.classList.add("hidden");
-  }
-});
-
-/* =========================================
-   INITIALIZATION
-========================================= */
-
-async function initializeApp() {
-  initializeDates();
-  initializeTheme();
-  updateUnitToggle();
-
-  elements.destination.value = "Delhi";
-  elements.clearDestination.classList.remove("hidden");
-
-  try {
-    const results = await searchLocations("Delhi");
-
-    if (results.length) {
-      state.location = results[0];
-    }
-  } catch (error) {
-    console.warn("Default location lookup failed.");
-  }
-}
-
-initializeApp();
